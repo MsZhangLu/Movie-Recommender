@@ -1,0 +1,5 @@
+package cmd
+
+class Conf {
+
+}
