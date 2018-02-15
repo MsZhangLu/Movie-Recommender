@@ -10,6 +10,8 @@ class MovieLensDataHolder(dataDirectoryPath: String) extends Serializable {
   val test_data = loadTestsFromADirectory()
   val train_data = loadTrains()
   val avg_ratings = averageTrainsRatings()
+  val avg_test = averageTestMovieRatings()
+  val true_ratings = loadEvaluateData()
 
   protected def loadRatingsFromADirectory() : RDD[((Int, Int), Double)] = {
     val ratings = SparkEnvironment.sc
@@ -37,18 +39,21 @@ class MovieLensDataHolder(dataDirectoryPath: String) extends Serializable {
     test_data
   }
 
-  protected def loadTrains() : RDD [(Int, Int, Double)] = {
+  protected def loadEvaluateData() : RDD [((Int, Int), Double)] = {
     val ratings_map = ratings.collectAsMap()
     val trainBroadcast = SparkEnvironment.sc.broadcast(ratings_map)
-    val ground = test_data.mapPartitions{arr =>
+    val true_ratings = test_data.mapPartitions{arr =>
       val m = trainBroadcast.value
       for{
         (key1, key2) <- arr
         if(m.contains(key1, key2))
       } yield ((key1, key2), m.get(key1, key2).getOrElse(Double).asInstanceOf[Double])
     }
+    true_ratings
+  }
 
-    val train_data = ratings.subtractByKey(ground)
+  protected def loadTrains() : RDD [(Int, Int, Double)] = {
+    val train_data = ratings.subtractByKey(true_ratings)
       .map (_ match {
         // format: (userID, movieID, rating)
         case ((userId, movieId), rating) => (userId.toInt, movieId.toInt, rating.toDouble)
@@ -65,6 +70,17 @@ class MovieLensDataHolder(dataDirectoryPath: String) extends Serializable {
       (movieID, avg)
     }
     avg
+  }
+
+  protected def averageTestMovieRatings() : RDD[(Int, Double)] = {
+    val avg_test = train_data.map(x => (x._1, x._3))
+      .groupByKey().map(data => {
+      val userId = data._1
+      val rates = data._2
+      val avg = rates.sum/rates.size
+      (userId, avg)
+    })
+    avg_test
   }
 
 }
