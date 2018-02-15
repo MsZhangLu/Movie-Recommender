@@ -1,18 +1,22 @@
+package inputdata
+
+import spark.SparkEnvironment
+
 import org.apache.spark.rdd.RDD
 
-class DataHolder(dataDirectoryPath: String) extends Serializable {
+class MovieLensDataHolder(dataDirectoryPath: String) extends Serializable {
 
-  protected val ratings = loadRatingsFromADirectory()
-  protected val test_data = loadTestsFromADirectory()
-  protected val train_data = loadTrains()
-  protected val avg_ratings = averageTrainsRatings()
+  val ratings = loadRatingsFromADirectory()
+  val test_data = loadTestsFromADirectory()
+  val train_data = loadTrains()
+  val avg_ratings = averageTrainsRatings()
 
-  protected def loadRatingsFromADirectory() : RDD[((Int, Int), Double)]= {
+  protected def loadRatingsFromADirectory() : RDD[((Int, Int), Double)] = {
     val ratings = SparkEnvironment.sc
-      .textFile(dataDirectoryPath + "/ratings.dat")
+      .textFile(dataDirectoryPath + "/ratings.csv")
       .mapPartitionsWithIndex(
-      (idx, iter) => if (idx == 0) iter.drop(1) else iter
-    ).map { line =>
+        (idx, iter) => if (idx == 0) iter.drop(1) else iter
+      ).map { line =>
       val fields = line.split(',')
       // format: ((userID, movieID), rating)
       ((fields(0).toInt, fields(1).toInt), fields(2).toDouble)
@@ -20,12 +24,12 @@ class DataHolder(dataDirectoryPath: String) extends Serializable {
     ratings
   }
 
-  protected def loadTestsFromADirectory() = {
+  protected def loadTestsFromADirectory() : RDD[(Int, Int)] = {
     val test_data = SparkEnvironment.sc
-      .textFile(dataDirectoryPath + "/testing_small.dat")
+      .textFile(dataDirectoryPath + "/testing_small.csv")
       .mapPartitionsWithIndex(
-      (idx, iter) => if (idx == 0) iter.drop(1) else iter
-    ).map { line =>
+        (idx, iter) => if (idx == 0) iter.drop(1) else iter
+      ).map { line =>
       val fields = line.split(',')
       // format: (userID, movieID)
       (fields(0).toInt, fields(1).toInt)
@@ -33,7 +37,7 @@ class DataHolder(dataDirectoryPath: String) extends Serializable {
     test_data
   }
 
-  protected def loadTrains() = {
+  protected def loadTrains() : RDD [(Int, Int, Double)] = {
     val ratings_map = ratings.collectAsMap()
     val trainBroadcast = SparkEnvironment.sc.broadcast(ratings_map)
     val ground = test_data.mapPartitions{arr =>
@@ -52,7 +56,7 @@ class DataHolder(dataDirectoryPath: String) extends Serializable {
     train_data
   }
 
-  protected def averageTrainsRatings() = {
+  protected def averageTrainsRatings() : RDD[(Int, Double)] = {
     val avg = train_data.map(x => (x._2, x._3))
       .groupByKey().map { data =>
       val movieID = data._1
